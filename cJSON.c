@@ -2485,6 +2485,104 @@ CJSON_PUBLIC(cJSON_bool) cJSON_IsRaw(const cJSON * const item)
     return (item->type & 0xFF) == cJSON_Raw;
 }
 
+static size_t heap_parent(size_t index)
+{
+    return floor((index - 1) / 2);
+}
+
+static size_t heap_left_child(size_t index)
+{
+    return 2 * index + 1;
+}
+
+static size_t heap_right_child(size_t index)
+{
+    return 2 * index + 2;
+}
+
+#define smaller(a, b) (a < b)
+
+static void heap_swap(cJSON ** a, cJSON ** b)
+{
+    cJSON *temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+/* (Repair the heap whose root element is at index 'start', assuming the heaps rooted at its children are valid) */
+static void sift_down(cJSON *array[], size_t start, size_t end)
+{
+    size_t root = start;
+
+    while (heap_left_child(root) <= end) /* (While the root has at least one child) */
+    {
+        size_t swap = root; /* (Keeps track of child to swap with) */
+        size_t child = heap_left_child(root); /* (Left child of root) */
+
+        if (smaller(array[swap], array[child]))
+        {
+            swap = child;
+        }
+
+        /* (If there is a right child and that child is greater) */
+        if (((child + 1) <= end) && (smaller(array[swap], array[child + 1])))
+        {
+            swap = child + 1;
+        }
+
+        if (swap == root)
+        {
+            /* (The root holds the largest element. Since we assume the heaps rooted at the
+             * children are valid, this means that we are done.) */
+            return;
+        }
+        else
+        {
+            heap_swap(&(array[root]), &(array[swap]));
+
+            root = swap; /* (repeat to continue sifting down the child now) */
+        }
+    }
+}
+
+/* (Put elements of 'a' in heap order, in-place) */
+static void heapify(cJSON *array[], size_t length)
+{
+    /* (start is assigned the index in 'a' of the last parent node) */
+    /* (the last element in a 0-based array is at index count-1; find the parent of that element) */
+    ssize_t start = 0;
+
+    for (start = heap_parent(length - 1); start >= 0; start--) /* TODO don't use ssize_t */
+    {
+        /* (sift down the node at index 'start' to the proper place such that all nodes below
+         the start index are in heap order) */
+        sift_down(array, start, length - 1);
+        /* (go to the next parent node) */
+        start--;
+    }
+    /* (after sifting down the root all nodes/elements are in heap order) */
+}
+
+static void heapsort(cJSON *array[], size_t length)
+{
+    ssize_t end = length - 1;
+    /* (Build the heap in array a so that largest value is at the root) */
+    heapify(array, length);
+
+    /* (The following loop maintains the invariants that a[0:end] is a heap and every element
+     beyond end is greater than everything before it (so a[end:count] is in sorted order)) */
+    while (end > 0) /* TODO use unsigned size_t */
+    {
+        /* (a[0] is the root and largest value. The swap moves it in front of the sorted elements.) */
+        heap_swap(&(array[end]), &(array[0]));
+
+        /* (the heap size is reduced by one) */
+        end--;
+        /* (the swap ruined the heap property, so restore it) */
+        sift_down(array, 0, end);
+    }
+}
+
 CJSON_PUBLIC(cJSON_bool) cJSON_Compare(const cJSON * const a, const cJSON * const b, const cJSON_bool case_sensitive)
 {
     if ((a == NULL) || (b == NULL) || ((a->type & 0xFF) != (b->type & 0xFF)) || cJSON_IsInvalid(a))
